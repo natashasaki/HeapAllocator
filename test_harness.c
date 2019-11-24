@@ -132,6 +132,8 @@ static int test_scripts(char *script_names[], int num_script_names, bool quiet) 
             printf("successfully serviced %d requests. (payload/segment = %zu/%zu)", 
                 script.num_ops, script.peak_size, used_segment);
             if (used_segment > 0) {
+
+                // size of payload / how much was allocated
                 total_util += (100 * script.peak_size) / used_segment;
             }
             nsuccesses++;
@@ -217,7 +219,7 @@ static size_t eval_correctness(script_t *script, bool quiet, bool *success) {
             myfree(p);
             cur_size -= old_size;
         }
-
+        
         // check heap consistency after each request and stop if any error
         if (!quiet && !validate_heap()) {
             allocator_error(script, script->ops[req].lineno, 
@@ -258,6 +260,7 @@ static void *eval_malloc(int req, size_t requested_size, script_t *script,
     int id = script->ops[req].id;
 
     void *p;
+    //checks if enough space  to malloc (if  NULL, means no more space on heap)
     if ((p = mymalloc(requested_size)) == NULL && requested_size != 0) {
         allocator_error(script, script->ops[req].lineno, 
             "heap exhausted, malloc returned NULL");
@@ -373,6 +376,8 @@ static bool verify_block(void *ptr, size_t size, script_t *script, int lineno) {
 
         void *other_start = script->blocks[i].ptr;
         void *other_end = (char *)other_start + script->blocks[i].size;
+        // check if starts between another blocks location, if ends in other block
+        // or ptr engulfs another block
         if ((ptr >= other_start && ptr < other_end) || (end > other_start && end < other_end) ||
             (ptr < other_start && end >= other_end)) {
             allocator_error(script, lineno, "New block (%p:%p) overlaps existing block (%p:%p)",

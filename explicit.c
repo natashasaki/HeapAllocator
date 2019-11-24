@@ -1,3 +1,17 @@
+/* This program contains the implementation of the explicit heap allocator,
+   builds largely on the implicit free list allocator (see implicit.c).
+   However, this implementation manages to improve utilization and speed.
+   Includes unique malloc, free, realloc functions.
+*/
+
+/*
+   Unique points about explicit implementation: 
+   -  list managed as a doubly-linked list
+   - Malloc searches explicit list of free blocks
+   - freed block coalesced with right neighbor if also free
+   - Realloc resizes a block in-place whenever possible
+ */
+
 #include "allocator.h"
 #include "debug_break.h"
 

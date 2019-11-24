@@ -1,30 +1,180 @@
+/* This file contains the  implementation of the implicit free
+   list allocator. Includes functions that initialize the  heap,
+   deal with malloc, realloc, and freeing memory.
+ */
+
+/* Features of implicit:
+   - Headers that track block information (8byte)
+   - Free blocks that are recycled and reused for subsequent malloc requests if possible
+   - malloc implementation searches heap for free blocks with implicit list
+ */
+
 #include "allocator.h"
 #include "debug_break.h"
+#include <string.h>
 
+static void *segment_start;
+static size_t segment_size;
+static size_t nused;
+
+#define HEADER_SIZE 8
+
+#define GET(p) (*(size_t *)p) //extracts header bits
+#define GET_HEADER(blk) (size_t*)((char *)blk - HEADER_SIZE)
+#define GET_MEMORY(p) ((char *)p  + HEADER_SIZE)
+
+// LSB on: used; off: unused
+#define GET_USED(p) (GET(p) & 0x1) //gets least significant bit
+#define GET_SIZE(p) (GET(p) & ~0x8) // 3 LSB hold allocated status
+#define SET(p, val) (*(size_t *)p = val)
+#define SET_USED(p) (GET(p) |=  0x1)
+#define SET_UNUSED(p) (GET(p) &=  ~0x1)
+
+//#define NEXT(p) ((char*)p + GET_SIZE(p) - HEADER_SIZE)
+
+// node for linked list comprises of a ptr to the header and
+// pointer to next node
+typedef struct node {
+    size_t *ptr;
+    struct node *next;
+} node_t;
+
+// global variable for  start of linked list
+static void *segment_start;
+static size_t nused;
+static size_t segment_size;
+static node_t *base; //of linked list
+
+// start: 0x107000000 
+// size: 4294967296  (larger than  32 bytes unsigned max)
+
+//write linked  list  fxn
+// write next block extraction function
+
+size_t roundup(size_t sz, size_t mult) {
+    return (sz + mult - 1) & ~(mult - 1);
+}
+
+// !!expected to wipe the allocator's slate clean and start fresh!!
 bool myinit(void *heap_start, size_t heap_size) {
-    /* TODO: remove the line below and implement this!
-     * This must be called by a client before making any allocation
+    /*  This must be called by a client before making any allocation
      * requests.  The function returns true if initialization was 
      * successful, or false otherwise. The myinit function can be 
      * called to reset the heap to an empty state. When running 
      * against a set of of test scripts, our test harness calls 
      * myinit before starting each new script.
      */
-    return false;
+
+    // set first  linke list  as NULL  overwrite later
+    //heap_start = base;
+    // how to free?? 
+    segment_start = heap_start;
+    segment_size = heap_size;
+    nused = 0;
+    base->ptr = segment_start;
+    base->next = NULL;
+
+    if (heap_size <= HEADER_SIZE) {
+        return false;
+    }
+    return true;
 }
 
+// Malloc function that uses best fit to determine utilization of blocks. Implemented using a linked
+// list of structs containing a pointer to the header and apointer to  the next node
 void *mymalloc(size_t requested_size) {
-    // TODO: remove the line below and implement this!
+
+    // make sure allocated block aligns with ALIGNMENT!!
+    // ALIGMENT for PAYLOAD not internal heap data like HEADER
+
+    // 8 bytes to store size & status in-use vs not (use any of 3 LSB to store)
+    size_t total_size = roundup(requested_size, HEADER_SIZE); 
+    if (requested_size == 0 || requested_size > MAX_REQUEST_SIZE ||
+        total_size + nused > segment_size) {
+        return NULL;
+    }
+
+    //if base of linked list is NULL create new struct with header ptr and next ptr 
+    
+    // implements best-fit search
+    // search each block for space
+    // goes through headers to check size of block and status
+    void *best_blk = NULL;
+    size_t best_blk_size = segment_size; //set to some max value
+    node_t *cur_node = base;
+    size_t *cur_blk = cur_node->ptr;
+    node_t *next_node;
+    size_t cur_blk_size;
+    
+    // potentially move down
+    //   if (!cur_node->next) {
+        //       cur_node->next = next_node;
+    //      next_node->ptr = (char*)cur_node->ptr + total_size; //in general segment start + nused 
+        //      next_node->next = NULL;
+        //   }
+      
+    while(cur_node->next) {
+        cur_blk_size = GET_SIZE(cur_blk);
+        if(cur_blk_size >= total_size && !GET_USED(cur_blk)) {
+            if((cur_blk_size < best_blk_size) || (best_blk == NULL)) {
+                best_blk = cur_blk;
+                best_blk_size = cur_blk_size;
+            }
+        }
+        cur_node = cur_node->next; //next node
+        cur_blk = cur_node->ptr;
+    }
+    if (best_blk != NULL) { // usable block found
+        
+        SET_USED(best_blk);
+        void* block = GET_MEMORY(best_blk);
+        return block;
+        
+    } else { // new  allocation
+        // set header
+        size_t header = (total_size |= 0x1); //multiple of 8 ie last 3 bytes 0's)
+       
+        *(cur_node->ptr) = header;
+        cur_node->next = next_node;
+        next_node->ptr = (size_t *)((char*)cur_node->ptr + total_size); //in general segment start + nused 
+        next_node->next = NULL;
+           
+        if (cur_node == base) {
+            base = cur_node;
+        }
+    }
+    nused += GET_SIZE(best_blk);
     return NULL;
 }
 
+// this function "frees"  memory by clearing the lowest bit in the header (where use of
+// block  is stored) for future resuse
 void myfree(void *ptr) {
-    // TODO: implement this!
+    if (ptr == NULL) {
+        return;
+    }
+    void *head = GET_HEADER(ptr);
+    SET_UNUSED(head); 
 }
 
+// myrealloc moves memory to new location with the new size and copies
+// over data from old pointer and frees the old_ptr
 void *myrealloc(void *old_ptr, size_t new_size) {
-    // TODO: remove the line below and implement this!
-    return NULL;
+    size_t *old_head = GET_HEADER(old_ptr);
+    if (old_ptr == NULL) {
+        return  mymalloc(new_size); //nothing to copy over
+    } else if (old_ptr != NULL && new_size == 0) { 
+        myfree(old_ptr);
+    } else {
+        void* new_ptr = mymalloc(new_size); // updating of new header done in malloc
+        if (new_ptr == NULL) { //realloc failed
+            return NULL;
+        }
+       
+        memcpy(new_ptr, old_ptr, GET_SIZE(old_head));
+        myfree(old_ptr);
+        return new_ptr;
+    }
 }
 
 bool validate_heap() {
@@ -36,5 +186,9 @@ bool validate_heap() {
      * You can also use the breakpoint() function to stop
      * in the debugger - e.g. if (something_is_wrong) breakpoint();
      */
-    return false;
+
+    if(!base)  {
+        return false;
+    }
+    return true;
 }
