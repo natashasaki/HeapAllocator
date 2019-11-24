@@ -66,7 +66,7 @@ bool myinit(void *heap_start, size_t heap_size) {
      */
 
     // set first  linke list  as NULL  overwrite later
-    //heap_start = base;
+ 
     // how to free?? 
     segment_start = heap_start;
     segment_size = heap_size;
@@ -88,7 +88,7 @@ void *mymalloc(size_t requested_size) {
     // ALIGMENT for PAYLOAD not internal heap data like HEADER
 
     // 8 bytes to store size & status in-use vs not (use any of 3 LSB to store)
-    size_t total_size = roundup(requested_size, HEADER_SIZE); 
+    size_t total_size = roundup(requested_size + HEADER_SIZE, ALIGNMENT); 
     if (requested_size == 0 || requested_size > MAX_REQUEST_SIZE ||
         total_size + nused > segment_size) {
         return NULL;
@@ -105,14 +105,7 @@ void *mymalloc(size_t requested_size) {
     size_t *cur_blk = cur_node->ptr;
     node_t *next_node;
     size_t cur_blk_size;
-    
-    // potentially move down
-    //   if (!cur_node->next) {
-        //       cur_node->next = next_node;
-    //      next_node->ptr = (char*)cur_node->ptr + total_size; //in general segment start + nused 
-        //      next_node->next = NULL;
-        //   }
-      
+    void *node;
     while(cur_node->next) {
         cur_blk_size = GET_SIZE(cur_blk);
         if(cur_blk_size >= total_size && !GET_USED(cur_blk)) {
@@ -130,15 +123,21 @@ void *mymalloc(size_t requested_size) {
         void* block = GET_MEMORY(best_blk);
         return block;
         
-    } else { // new  allocation
+    } else { // new allocation
         // set header
         size_t header = (total_size |= 0x1); //multiple of 8 ie last 3 bytes 0's)
-       
         *(cur_node->ptr) = header;
-        cur_node->next = next_node;
-        next_node->ptr = (size_t *)((char*)cur_node->ptr + total_size); //in general segment start + nused 
-        next_node->next = NULL;
-           
+        
+        
+       
+        node = (node_t*)((char*)cur_node + total_size);
+        ((node_t*)node)->next = NULL;
+        ((node_t*)node)->ptr = (size_t *)((char*)cur_node->ptr + total_size);
+        next_node = node;
+        cur_node->next = next_node;  // unitialized... ??
+        // next_node->ptr = (size_t *)((char*)cur_node->ptr + total_size); //in general segment start + nused 
+        //  next_node->next = NULL;
+        
         if (cur_node == base) {
             base = cur_node;
         }
@@ -175,6 +174,7 @@ void *myrealloc(void *old_ptr, size_t new_size) {
         myfree(old_ptr);
         return new_ptr;
     }
+    return NULL;
 }
 
 bool validate_heap() {
