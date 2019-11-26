@@ -25,7 +25,7 @@ static size_t nused;
 
 // LSB on: used; off: unused
 #define GET_USED(p) (GET(p) & 0x1) //gets least significant bit
-#define GET_SIZE(p) (GET(p) & ~0x8) // 3 LSB hold allocated status
+#define GET_SIZE(p) (GET(p) & ~0x7) // 3 LSB hold allocated status
 #define SET(p, val) (*(size_t *)p = val)
 #define SET_USED(p) (GET(p) |=  0x1)
 #define SET_UNUSED(p) (GET(p) &=  ~0x1)
@@ -124,7 +124,7 @@ void *mymalloc(size_t requested_size) {
     if (best_blk_head != NULL) { // usable block found
         SET_USED(best_blk_head);
         void* block = GET_MEMORY(best_blk_head);
-        nused += total_size;
+        //nused += (total_size - HEADER_SIZE);
         return block;
         
     } else { // new allocation
@@ -136,7 +136,7 @@ void *mymalloc(size_t requested_size) {
         *(next_node.header) = header;
 
         cur_node->next = &next_node;
-        nused += total_size;
+        //nused += total_size;
         return GET_MEMORY(next_node.header);
 
         
@@ -164,7 +164,8 @@ void myfree(void *ptr) {
     }
     size_t *head = GET_HEADER(ptr);
     SET_UNUSED(head);
-    nused -= GET_SIZE(head);
+   
+    // nused -= (GET_SIZE(head) - HEADER_SIZE);
 }
 
 // myrealloc moves memory to new location with the new size and copies
