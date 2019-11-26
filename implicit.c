@@ -9,6 +9,7 @@
    - malloc implementation searches heap for free blocks with implicit list
  */
 
+
 #include "allocator.h"
 #include "debug_break.h"
 #include <string.h>
@@ -19,9 +20,9 @@ static size_t nused;
 
 #define HEADER_SIZE 8
 
-#define GET(p) (*(size_t *)p) //extracts header bits
-#define GET_HEADER(blk) (size_t*)((char *)blk - HEADER_SIZE)
-#define GET_MEMORY(p) ((char *)p  + HEADER_SIZE)
+#define GET(p) (*(Header *)p).sa_bit //extracts header bits
+#define GET_HEADER(blk) (Header *)blk - 1
+#define GET_MEMORY(p) p + 1
 
 // LSB on: used; off: unused
 #define GET_USED(p) (GET(p) & 0x1) //gets least significant bit
@@ -34,17 +35,16 @@ static size_t nused;
 
 // node for linked list comprises of a ptr to the header and
 // pointer to next node
-typedef struct node {
-    size_t *header;
-    struct node *next;
-} node_t;
+typedef struct header {
+    size_t sa_bit; // stores size and allocation status
+} Header;
 
 // global variable for  start of linked list
 static void *segment_start;
 static size_t nused;
 static size_t segment_size;
-static node_t start; //of linked list
-static node_t * base;
+//static node_t start; //of linked list
+static Header *base;
 
 // start: 0x107000000 
 // size: 4294967296  (larger than  32 bytes unsigned max)
@@ -72,9 +72,11 @@ bool myinit(void *heap_start, size_t heap_size) {
     segment_start = heap_start;
     segment_size = heap_size;
     nused = 0;
-    start.header = segment_start;
-    start.next = NULL;
-    base =  &start;
+    base = segment_start;
+    (*base).sa_bit = 0; //unused
+        // start.header = segment_start;
+        // start.next = NULL;
+    //  base =  &start;
     if (heap_size <= HEADER_SIZE) {
         return false;
     }
@@ -100,59 +102,40 @@ void *mymalloc(size_t requested_size) {
     // implements best-fit search
     // search each block for space
     // goes through headers to check size of block and status
-    void *best_blk_head = NULL;
+
     size_t best_blk_size = segment_size; //set to some max value
-    node_t *cur_node = base;
-    size_t *cur_head = cur_node->header;
-    node_t next_node;
-    size_t cur_blk_size;
-    //void *node;
+    Header  *best_blk_head = NULL; 
+    Header *cur_head = base;
+    // Header next_head;
+    size_t cur_blk_size = GET_SIZE(base);
+    Header *next_head_loc;
+    void *block;
     
-    
-    while(cur_node->next) { //go through up to last node
-        cur_blk_size = GET_SIZE(cur_head);
+    while(cur_blk_size != 0) { //go through up to last node
+       
         if(cur_blk_size >= total_size && !GET_USED(cur_head)) {
             if((cur_blk_size < best_blk_size) || (best_blk_head == NULL)) {
                 best_blk_head = cur_head;
-                best_blk_size = cur_blk_size;
             }
         }
-        cur_node = cur_node->next; //next node
-        cur_head= cur_node->header;
+        cur_head = (Header *)((char*)cur_head + GET_SIZE(cur_head)); //next node
+        cur_blk_size = GET_SIZE(cur_head);
     }
     
     if (best_blk_head != NULL) { // usable block found
         SET_USED(best_blk_head);
-        void* block = GET_MEMORY(best_blk_head);
-        //nused += (total_size - HEADER_SIZE);
+        block = GET_MEMORY(best_blk_head);  //best_blk_head + 1;
         return block;
         
     } else { // new allocation
         // set header
         size_t header = (total_size |= 0x1); //multiple of 8 ie last 3 bytes 0's)
-
-        next_node.header = (size_t *)((char*)cur_head + GET_SIZE(cur_head));
-        next_node.next = NULL;
-        *(next_node.header) = header;
-
-        cur_node->next = &next_node;
-        //nused += total_size;
-        return GET_MEMORY(next_node.header);
-
-        
-        // node = (node_t*)((char*)cur_node + total_size);
-        // ((node_t*)node)->next = NULL;
-        // ((node_t*)node)->ptr = (size_t *)((char*)cur_node->ptr + total_size);
-        //  next_node = node;
-        //  cur_node->next = next_node;  // unitialized... ??
-        // next_node->ptr = (size_t *)((char*)cur_node->ptr + total_size); //in general segment start + nused 
-        //  next_node->next = NULL;
-        
-        //    if (cur_node == base) {
-        //      base = cur_node;
-        //  }
+        next_head_loc = (Header*)((char*)cur_head + GET_SIZE(cur_head));
+        (*next_head_loc).sa_bit = header; 
+        // next_head.sa_bit = header;
+        block = GET_MEMORY(next_head_loc);
+        return block;
     }
-    //nused += GET_SIZE(best_blk);
     return NULL;
 }
 
@@ -162,22 +145,20 @@ void myfree(void *ptr) {
     if (ptr == NULL) {
         return;
     }
-    size_t *head = GET_HEADER(ptr);
+    Header* head = GET_HEADER(ptr);
     SET_UNUSED(head);
-   
-    // nused -= (GET_SIZE(head) - HEADER_SIZE);
 }
 
 // myrealloc moves memory to new location with the new size and copies
 // over data from old pointer and frees the old_ptr
 void *myrealloc(void *old_ptr, size_t new_size) {
-    size_t *old_head = GET_HEADER(old_ptr);
+    Header *old_head = GET_HEADER(old_ptr);
     if (old_ptr == NULL) {
-        return  mymalloc(new_size); //nothing to copy over
+        return mymalloc(new_size); //nothing to copy over
     } else if (old_ptr != NULL && new_size == 0) { 
         myfree(old_ptr);
     } else {
-        void* new_ptr = mymalloc(new_size); // updating of new header done in malloc
+        void * new_ptr = mymalloc(new_size); // updating of new header done in malloc
         if (new_ptr == NULL) { //realloc failed
             return NULL;
         }
