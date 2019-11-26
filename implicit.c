@@ -43,7 +43,8 @@ typedef struct node {
 static void *segment_start;
 static size_t nused;
 static size_t segment_size;
-static node_t *base; //of linked list
+static node_t start; //of linked list
+static node_t * base;
 
 // start: 0x107000000 
 // size: 4294967296  (larger than  32 bytes unsigned max)
@@ -71,9 +72,9 @@ bool myinit(void *heap_start, size_t heap_size) {
     segment_start = heap_start;
     segment_size = heap_size;
     nused = 0;
-    base->header = segment_start;
-    base->next = NULL;
-
+    start.header = segment_start;
+    start.next = NULL;
+    base =  &start;
     if (heap_size <= HEADER_SIZE) {
         return false;
     }
@@ -130,7 +131,7 @@ void *mymalloc(size_t requested_size) {
         // set header
         size_t header = (total_size |= 0x1); //multiple of 8 ie last 3 bytes 0's)
 
-        next_node.header = (size_t *)((char*)cur_head + total_size);
+        next_node.header = (size_t *)((char*)cur_head + GET_SIZE(cur_head));
         next_node.next = NULL;
         *(next_node.header) = header;
 
