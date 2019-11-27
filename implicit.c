@@ -160,13 +160,15 @@ void myfree(void *ptr) {
 // myrealloc moves memory to new location with the new size and copies
 // over data from old pointer and frees the old_ptr
 void *myrealloc(void *old_ptr, size_t new_size) {
-    Header *old_head = GET_HEADER(old_ptr);
-    size_t  old_size = GET_SIZE(old_head);
+    
     if (old_ptr == NULL) {
         return mymalloc(new_size); //nothing to copy over
+        
     } else if (old_ptr != NULL && new_size == 0) { 
         myfree(old_ptr);
     } else {
+        Header *old_head = GET_HEADER(old_ptr);
+        size_t  old_size = GET_SIZE(old_head);
         void * new_ptr = mymalloc(new_size); // updating of new header done in malloc
         if (new_ptr == NULL) { //realloc failed
             return NULL;

@@ -5,8 +5,8 @@
 # Initially, the flags are configured for no optimization (to enable better
 # debugging) but you can experiment with different compiler settings
 # (e.g. different levels and enabling/disabling specific optimizations)
-bump.o: CFLAGS += -Og
-implicit.o: CFLAGS += -O0
+bump.o: CFLAGS += -O0
+implicit.o: CFLAGS += -O2
 explicit.o: CFLAGS += -O0
 
 ALLOCATORS = bump implicit explicit
