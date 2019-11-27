@@ -27,9 +27,10 @@ static size_t nused;
 // LSB on: used; off: unused
 #define GET_USED(p) (GET(p) & 0x1) //gets least significant bit
 #define GET_SIZE(p) (GET(p) & ~0x7) // 3 LSB hold allocated status
-#define SET(p, val) (*(size_t *)p = val)
+#define SET_HEADER(p, val) (GET(p) = val)
 #define SET_USED(p) (GET(p) |=  0x1)
 #define SET_UNUSED(p) (GET(p) &=  ~0x1)
+#define GET_NEXT_HEADER(p) (Header*)((char*)p + GET_SIZE(p));
 
 //#define NEXT(p) ((char*)p + GET_SIZE(p) - HEADER_SIZE)
 
@@ -109,7 +110,6 @@ void *mymalloc(size_t requested_size) {
     size_t best_blk_size = segment_size; //set to some max value
     Header  *best_blk_head = NULL; 
     Header *cur_head = base;
-    // Header next_head;
     size_t cur_blk_size = GET_SIZE(base);
     Header *next_head_loc;
     void *block;
@@ -122,9 +122,8 @@ void *mymalloc(size_t requested_size) {
                 best_blk_size = cur_blk_size;
             }
         }
-        cur_head = (Header *)((char*)cur_head + GET_SIZE(cur_head)); //next node
-
-        //THIS LINE  CAUSING  ERRORS!!
+        cur_head = GET_NEXT_HEADER(cur_head);
+        // cur_head = (Header *)((char*)cur_head + GET_SIZE(cur_head)); //next node
         cur_blk_size = GET_SIZE(cur_head);
     }
     
@@ -132,14 +131,14 @@ void *mymalloc(size_t requested_size) {
         SET_USED(best_blk_head);
         block = GET_MEMORY(best_blk_head);  //best_blk_head + 1;
         nused += (best_blk_size - HEADER_SIZE);
-        //nused += best_blk_size;
         return block;
         
     } else { // new allocation
-        // set header
         size_t header = (total_size + 1); //multiple of 8 ie last 3 bytes 0's)
-        next_head_loc = (Header*)((char*)cur_head + GET_SIZE(cur_head));
-        (*next_head_loc).sa_bit = header; 
+        //next_head_loc = (Header*)((char*)cur_head + GET_SIZE(cur_head));
+        next_head_loc = GET_NEXT_HEADER(cur_head);
+        SET_HEADER(next_head_loc, header);
+        // (*next_head_loc).sa_bit = header; 
         nused += total_size;
         block = GET_MEMORY(next_head_loc);
         return block;
@@ -156,7 +155,6 @@ void myfree(void *ptr) {
     Header* head = GET_HEADER(ptr);
     SET_UNUSED(head);
     nused -= (GET_SIZE(head) - HEADER_SIZE);
-    //nused -= GET_SIZE(head);
 }
 
 // myrealloc moves memory to new location with the new size and copies
