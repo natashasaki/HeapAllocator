@@ -91,9 +91,10 @@ void *mymalloc(size_t requested_size) {
     // ALIGMENT for PAYLOAD not internal heap data like HEADER
 
     // 8 bytes to store size & status in-use vs not (use any of 3 LSB to store)
-    size_t total_size = roundup(requested_size + HEADER_SIZE, ALIGNMENT); 
+    size_t total_size = roundup(requested_size + HEADER_SIZE, ALIGNMENT);
+    size_t req_size = roundup(requested_size, ALIGNMENT);
     if (requested_size == 0 || requested_size > MAX_REQUEST_SIZE ||
-        total_size + nused > segment_size) {
+        (req_size + nused > segment_size)) {
         return NULL;
     }
 
@@ -116,6 +117,7 @@ void *mymalloc(size_t requested_size) {
         if(cur_blk_size >= total_size && !GET_USED(cur_head)) {
             if((cur_blk_size < best_blk_size) || (best_blk_head == NULL)) {
                 best_blk_head = cur_head;
+                best_blk_size = cur_blk_size;
             }
         }
         cur_head = (Header *)((char*)cur_head + GET_SIZE(cur_head)); //next node
@@ -127,15 +129,15 @@ void *mymalloc(size_t requested_size) {
     if (best_blk_head != NULL) { // usable block found
         SET_USED(best_blk_head);
         block = GET_MEMORY(best_blk_head);  //best_blk_head + 1;
-        nused += (total_size - HEADER_SIZE);
+        nused += (best_blk_size - HEADER_SIZE);
+        //nused += best_blk_size;
         return block;
         
     } else { // new allocation
         // set header
-        size_t header = (total_size |= 0x1); //multiple of 8 ie last 3 bytes 0's)
+        size_t header = (total_size + 1); //multiple of 8 ie last 3 bytes 0's)
         next_head_loc = (Header*)((char*)cur_head + GET_SIZE(cur_head));
         (*next_head_loc).sa_bit = header; 
-        // next_head.sa_bit = header;
         nused += total_size;
         block = GET_MEMORY(next_head_loc);
         return block;
@@ -152,6 +154,7 @@ void myfree(void *ptr) {
     Header* head = GET_HEADER(ptr);
     SET_UNUSED(head);
     nused -= (GET_SIZE(head) - HEADER_SIZE);
+    //nused -= GET_SIZE(head);
 }
 
 // myrealloc moves memory to new location with the new size and copies
