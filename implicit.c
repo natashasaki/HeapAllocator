@@ -91,8 +91,9 @@ void *mymalloc(size_t requested_size) {
     // ALIGMENT for PAYLOAD not internal heap data like HEADER
 
     // 8 bytes to store size & status in-use vs not (use any of 3 LSB to store)
-    size_t total_size = roundup(requested_size + HEADER_SIZE, ALIGNMENT);
+   
     size_t req_size = roundup(requested_size, ALIGNMENT);
+    size_t total_size = req_size + HEADER_SIZE; //we know header size is ALIGNMENT size in this  case 
     if (requested_size == 0 || requested_size > MAX_REQUEST_SIZE ||
         (req_size + nused > segment_size)) {
         return NULL;
