@@ -119,12 +119,15 @@ void *mymalloc(size_t requested_size) {
             }
         }
         cur_head = (Header *)((char*)cur_head + GET_SIZE(cur_head)); //next node
+
+        //THIS LINE  CAUSING  ERRORS!!
         cur_blk_size = GET_SIZE(cur_head);
     }
     
     if (best_blk_head != NULL) { // usable block found
         SET_USED(best_blk_head);
         block = GET_MEMORY(best_blk_head);  //best_blk_head + 1;
+        nused += (total_size - HEADER_SIZE);
         return block;
         
     } else { // new allocation
@@ -133,6 +136,7 @@ void *mymalloc(size_t requested_size) {
         next_head_loc = (Header*)((char*)cur_head + GET_SIZE(cur_head));
         (*next_head_loc).sa_bit = header; 
         // next_head.sa_bit = header;
+        nused += total_size;
         block = GET_MEMORY(next_head_loc);
         return block;
     }
@@ -147,12 +151,14 @@ void myfree(void *ptr) {
     }
     Header* head = GET_HEADER(ptr);
     SET_UNUSED(head);
+    nused -= (GET_SIZE(head) - HEADER_SIZE);
 }
 
 // myrealloc moves memory to new location with the new size and copies
 // over data from old pointer and frees the old_ptr
 void *myrealloc(void *old_ptr, size_t new_size) {
     Header *old_head = GET_HEADER(old_ptr);
+    size_t  old_size = GET_SIZE(old_head);
     if (old_ptr == NULL) {
         return mymalloc(new_size); //nothing to copy over
     } else if (old_ptr != NULL && new_size == 0) { 
@@ -162,8 +168,10 @@ void *myrealloc(void *old_ptr, size_t new_size) {
         if (new_ptr == NULL) { //realloc failed
             return NULL;
         }
-       
-        memcpy(new_ptr, old_ptr, GET_SIZE(old_head));
+        if (new_size < old_size) {
+            old_size = new_size;
+        }
+        memcpy(new_ptr, old_ptr, old_size);
         myfree(old_ptr);
         return new_ptr;
     }
