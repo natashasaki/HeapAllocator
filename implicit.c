@@ -79,7 +79,7 @@ void *mymalloc(size_t requested_size) {
     // 8 bytes to store size & status in-use vs not (use any of 3 LSB to store)
    
     size_t req_size = roundup(requested_size, ALIGNMENT);
-    size_t total_size = requested_size  + HEADER_SIZE; // header is a multiple of alignment
+    size_t total_size = req_size  + HEADER_SIZE; // header is a multiple of alignment
     if (requested_size == 0 || requested_size > MAX_REQUEST_SIZE ||
         (req_size + nused > segment_size)) {
         return NULL;
@@ -132,8 +132,8 @@ void *mymalloc(size_t requested_size) {
 Header *find_best_header(Header** cur_head_ad, size_t total_size) {
     size_t best_blk_size = segment_size; //set to some max value
     Header *best_blk_head = NULL; 
-    Header *cur_head = base;
-    size_t cur_blk_size = GET_SIZE(base);
+    Header *cur_head = *cur_head_ad;
+    size_t cur_blk_size = GET_SIZE(*cur_head_ad);
     
     while(cur_blk_size != 0) { //go through up to last node   
         if(cur_blk_size >= total_size && !GET_USED(cur_head)) {
