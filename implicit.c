@@ -9,22 +9,15 @@
    - malloc implementation searches heap for free blocks with implicit list
  */
 
-
 #include "allocator.h"
 #include "debug_break.h"
 #include <string.h>
-
-static void *segment_start;
-static size_t segment_size;
-static size_t nused;
 
 #define HEADER_SIZE 8
 
 #define GET(p) (*(Header *)p).sa_bit //extracts header bits
 #define GET_HEADER(blk) (Header *)blk - 1
 #define GET_MEMORY(p) p + 1
-
-// LSB on: used; off: unused
 #define GET_USED(p) (GET(p) & 0x1) //gets least significant bit
 #define GET_SIZE(p) (GET(p) & ~0x7) // 3 LSB hold allocated status
 #define SET_HEADER(p, val) (GET(p) = val)
@@ -44,14 +37,9 @@ typedef struct header {
 static void *segment_start;
 static size_t nused;
 static size_t segment_size;
-//static node_t start; //of linked list
-static Header *base;
+static Header *base; //start of node
 
-// start: 0x107000000 
-// size: 4294967296  (larger than  32 bytes unsigned max)
-
-//write linked  list  fxn
-// write next block extraction function
+Header *find_best_header(Header** cur_head, size_t size);
 
 size_t roundup(size_t sz, size_t mult) {
     return (sz + mult - 1) & ~(mult - 1);
@@ -68,16 +56,13 @@ bool myinit(void *heap_start, size_t heap_size) {
      */
 
     // set first  linke list  as NULL  overwrite later
- 
     // how to free?? 
     segment_start = heap_start;
     segment_size = heap_size;
     nused = 0;
     base = segment_start;
     (*base).sa_bit = 0; //unused
-        // start.header = segment_start;
-        // start.next = NULL;
-    //  base =  &start;
+     
     if (heap_size <= HEADER_SIZE) {
         return false;
     }
@@ -94,8 +79,7 @@ void *mymalloc(size_t requested_size) {
     // 8 bytes to store size & status in-use vs not (use any of 3 LSB to store)
    
     size_t req_size = roundup(requested_size, ALIGNMENT);
-    // size_t total_size = req_size + HEADER_SIZE; //we know header size is ALIGNMENT size in this  case
-    size_t total_size = roundup(requested_size + HEADER_SIZE, ALIGNMENT);
+    size_t total_size = requested_size  + HEADER_SIZE; // header is a multiple of alignment
     if (requested_size == 0 || requested_size > MAX_REQUEST_SIZE ||
         (req_size + nused > segment_size)) {
         return NULL;
@@ -107,27 +91,28 @@ void *mymalloc(size_t requested_size) {
     // search each block for space
     // goes through headers to check size of block and status
 
-    size_t best_blk_size = segment_size; //set to some max value
-    Header  *best_blk_head = NULL; 
-    Header *cur_head = base;
-    size_t cur_blk_size = GET_SIZE(base);
+    //   size_t best_blk_size = segment_size; //set to some max value
+    // Header *best_blk_head = NULL; 
+    // Header *cur_head = base;
+    // size_t cur_blk_size = GET_SIZE(base);
     Header *next_head_loc;
     void *block;
-    
-    while(cur_blk_size != 0) { //go through up to last node
-       
-        if(cur_blk_size >= total_size && !GET_USED(cur_head)) {
-            if((cur_blk_size < best_blk_size) || (best_blk_head == NULL)) {
-                best_blk_head = cur_head;
-                best_blk_size = cur_blk_size;
-            }
-        }
-        cur_head = GET_NEXT_HEADER(cur_head);
-        // cur_head = (Header *)((char*)cur_head + GET_SIZE(cur_head)); //next node
-        cur_blk_size = GET_SIZE(cur_head);
-    }
+    Header *cur_head = base;
+    Header *best_blk_head = find_best_header(&cur_head, total_size);
+
+    //   while(cur_blk_size != 0) { //go through up to last node   
+    //     if(cur_blk_size >= total_size && !GET_USED(cur_head)) {
+    //      if((cur_blk_size < best_blk_size) || (best_blk_head == NULL)) {
+    //         best_blk_head = cur_head;
+    //          best_blk_size = cur_blk_size;
+    //      }
+    //  }
+    //  cur_head = GET_NEXT_HEADER(cur_head);
+    //  cur_blk_size = GET_SIZE(cur_head);
+    // }
     
     if (best_blk_head != NULL) { // usable block found
+        size_t best_blk_size = GET_SIZE(best_blk_head);
         SET_USED(best_blk_head);
         block = GET_MEMORY(best_blk_head);  //best_blk_head + 1;
         nused += (best_blk_size - HEADER_SIZE);
@@ -135,10 +120,8 @@ void *mymalloc(size_t requested_size) {
         
     } else { // new allocation
         size_t header = (total_size + 1); //multiple of 8 ie last 3 bytes 0's)
-        //next_head_loc = (Header*)((char*)cur_head + GET_SIZE(cur_head));
         next_head_loc = GET_NEXT_HEADER(cur_head);
         SET_HEADER(next_head_loc, header);
-        // (*next_head_loc).sa_bit = header; 
         nused += total_size;
         block = GET_MEMORY(next_head_loc);
         return block;
@@ -146,6 +129,26 @@ void *mymalloc(size_t requested_size) {
     return NULL;
 }
 
+Header *find_best_header(Header** cur_head_ad, size_t total_size) {
+    size_t best_blk_size = segment_size; //set to some max value
+    Header *best_blk_head = NULL; 
+    Header *cur_head = base;
+    size_t cur_blk_size = GET_SIZE(base);
+    
+    while(cur_blk_size != 0) { //go through up to last node   
+        if(cur_blk_size >= total_size && !GET_USED(cur_head)) {
+            if((cur_blk_size < best_blk_size) || (best_blk_head == NULL)) {
+                best_blk_head = cur_head;
+                best_blk_size = cur_blk_size;
+            }
+        }
+        cur_head = GET_NEXT_HEADER(cur_head);
+        cur_blk_size = GET_SIZE(cur_head);
+    }
+
+    return best_blk_head;
+}
+    
 // this function "frees"  memory by clearing the lowest bit in the header (where use of
 // block  is stored) for future resuse
 void myfree(void *ptr) {
@@ -154,7 +157,7 @@ void myfree(void *ptr) {
     }
     Header* head = GET_HEADER(ptr);
     SET_UNUSED(head);
-    nused -= (GET_SIZE(head) - HEADER_SIZE);
+    nused -= (GET_SIZE(head) - HEADER_SIZE);   
 }
 
 // myrealloc moves memory to new location with the new size and copies
