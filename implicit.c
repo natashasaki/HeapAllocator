@@ -145,7 +145,7 @@ Header *find_best_header(Header** cur_head_ad, size_t total_size) {
         cur_head = GET_NEXT_HEADER(cur_head);
         cur_blk_size = GET_SIZE(cur_head);
     }
-
+    *cur_head_ad = cur_head;
     return best_blk_head;
 }
     
