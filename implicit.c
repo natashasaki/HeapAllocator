@@ -22,10 +22,8 @@
 #define GET_SIZE(p) (GET(p) & ~0x7) // 3 LSB hold allocated status
 #define SET_HEADER(p, val) (GET(p) = val)
 #define SET_USED(p) (GET(p) |=  0x1)
-#define SET_UNUSED(p) (GET(p) &=  ~0x1)
+#define SET_UNUSED(p) (GET(p) &= ~0x1)
 #define GET_NEXT_HEADER(p) (Header*)((char*)p + GET_SIZE(p));
-
-//#define NEXT(p) ((char*)p + GET_SIZE(p) - HEADER_SIZE)
 
 // node for linked list comprises of a ptr to the header and
 // pointer to next node
@@ -37,15 +35,18 @@ typedef struct header {
 static void *segment_start;
 static size_t nused;
 static size_t segment_size;
-static Header *base; //start of node
+static Header *base; //start node
 
+//helper function header
 Header *find_best_header(Header** cur_head, size_t size);
 
+// rounds up sz to closest multiple of mult
 size_t roundup(size_t sz, size_t mult) {
     return (sz + mult - 1) & ~(mult - 1);
 }
 
-// !!expected to wipe the allocator's slate clean and start fresh!!
+// initialize the heap and return the  status of this
+// initialization
 bool myinit(void *heap_start, size_t heap_size) {
     /*  This must be called by a client before making any allocation
      * requests.  The function returns true if initialization was 
@@ -55,30 +56,23 @@ bool myinit(void *heap_start, size_t heap_size) {
      * myinit before starting each new script.
      */
 
-    // set first  linke list  as NULL  overwrite later
-    // how to free?? 
+    // does heap have to be bigger than header size? can you initialize knowing
+    // there is space for 0 blocks?
+    if (heap_size < HEADER_SIZE) { 
+        return false;
+    }
+    
     segment_start = heap_start;
     segment_size = heap_size;
     nused = 0;
     base = segment_start;
-    memset(base, NULL, HEADER_SIZE);
-    (*base).sa_bit = 0; //unused
-     
-    if (heap_size <= HEADER_SIZE) {
-        return false;
-    }
+    (*base).sa_bit = 0; //clear heap by allowing overwrite
     return true;
 }
 
 // Malloc function that uses best fit to determine utilization of blocks. Implemented using a linked
 // list of structs containing a pointer to the header and apointer to  the next node
 void *mymalloc(size_t requested_size) {
-
-    // make sure allocated block aligns with ALIGNMENT!!
-    // ALIGMENT for PAYLOAD not internal heap data like HEADER
-
-    // 8 bytes to store size & status in-use vs not (use any of 3 LSB to store)
-   
     size_t req_size = roundup(requested_size, ALIGNMENT);
     size_t total_size = req_size  + HEADER_SIZE; // header is a multiple of alignment
     
