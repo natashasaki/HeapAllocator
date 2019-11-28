@@ -61,6 +61,7 @@ bool myinit(void *heap_start, size_t heap_size) {
     segment_size = heap_size;
     nused = 0;
     base = segment_start;
+    memset(base, NULL, HEADER_SIZE);
     (*base).sa_bit = 0; //unused
      
     if (heap_size <= HEADER_SIZE) {
@@ -80,36 +81,16 @@ void *mymalloc(size_t requested_size) {
    
     size_t req_size = roundup(requested_size, ALIGNMENT);
     size_t total_size = req_size  + HEADER_SIZE; // header is a multiple of alignment
+    
     if (requested_size == 0 || requested_size > MAX_REQUEST_SIZE ||
         (req_size + nused > segment_size)) {
         return NULL;
     }
 
-    //if base of linked list is NULL create new struct with header ptr and next ptr 
-    
-    // implements best-fit search
-    // search each block for space
-    // goes through headers to check size of block and status
-
-    //   size_t best_blk_size = segment_size; //set to some max value
-    // Header *best_blk_head = NULL; 
-    // Header *cur_head = base;
-    // size_t cur_blk_size = GET_SIZE(base);
     Header *next_head_loc;
     void *block;
     Header *cur_head = base;
     Header *best_blk_head = find_best_header(&cur_head, total_size);
-
-    //   while(cur_blk_size != 0) { //go through up to last node   
-    //     if(cur_blk_size >= total_size && !GET_USED(cur_head)) {
-    //      if((cur_blk_size < best_blk_size) || (best_blk_head == NULL)) {
-    //         best_blk_head = cur_head;
-    //          best_blk_size = cur_blk_size;
-    //      }
-    //  }
-    //  cur_head = GET_NEXT_HEADER(cur_head);
-    //  cur_blk_size = GET_SIZE(cur_head);
-    // }
     
     if (best_blk_head != NULL) { // usable block found
         size_t best_blk_size = GET_SIZE(best_blk_head);
@@ -119,7 +100,7 @@ void *mymalloc(size_t requested_size) {
         return block;
         
     } else { // new allocation
-        size_t header = (total_size + 1); //multiple of 8 ie last 3 bytes 0's)
+        size_t header = total_size + 1;
         next_head_loc = GET_NEXT_HEADER(cur_head);
         SET_HEADER(next_head_loc, header);
         nused += total_size;
@@ -129,13 +110,15 @@ void *mymalloc(size_t requested_size) {
     return NULL;
 }
 
+// function that searches for a free, usable block of at least
+// total_size  using best-fit (block with lowest amt of enough free space)
 Header *find_best_header(Header** cur_head_ad, size_t total_size) {
     size_t best_blk_size = segment_size; //set to some max value
     Header *best_blk_head = NULL; 
     Header *cur_head = *cur_head_ad;
     size_t cur_blk_size = GET_SIZE(*cur_head_ad);
     
-    while(cur_blk_size != 0) { //go through up to last node   
+    while(cur_blk_size != 0) {  
         if(cur_blk_size >= total_size && !GET_USED(cur_head)) {
             if((cur_blk_size < best_blk_size) || (best_blk_head == NULL)) {
                 best_blk_head = cur_head;
@@ -145,7 +128,7 @@ Header *find_best_header(Header** cur_head_ad, size_t total_size) {
         cur_head = GET_NEXT_HEADER(cur_head);
         cur_blk_size = GET_SIZE(cur_head);
     }
-    *cur_head_ad = cur_head;
+    *cur_head_ad = cur_head; // make sure current node in mymalloc is updated
     return best_blk_head;
 }
     
