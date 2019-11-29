@@ -54,6 +54,7 @@ static void *segment_start;
 static size_t nused;
 static size_t segment_size;
 static Header *base; //start node
+ListPointers *start;
 
 //helper function header
 Header *find_best_header(Header ** cur_head, size_t size);
@@ -86,6 +87,10 @@ bool myinit(void *heap_start, size_t heap_size) {
     nused = 0;
     base = segment_start;
     (*base).sa_bit = 0; //clear heap by allowing overwrite
+    start  = GET_LISTPOINTERS(base);
+    start->prev = NULL;
+    start->next = NULL;
+    
     return true;
 }
 
@@ -174,17 +179,17 @@ void myfree(void *ptr) {
         merge(ptr_lp, next_lp);
         //next_head = (Header *)((char*)head + GET_SIZE(head));
     } else { // if no merging, put  new free  ptr at front of linked list (LIFO)
-        ListPointers *first = GET_LISTPOINTERS(base);
-        first->prev = head;
+        
+        start->prev = head;
         ptr_lp->next = base;
         ptr_lp->prev = NULL;
         base = head;
+        start = GET_LISTPOINTERS(base);
     }
 
     SET_UNUSED(head);
     nused -= (GET_SIZE(head) - HEADER_SIZE);
 
-  
   
 }
 
@@ -199,20 +204,58 @@ void *myrealloc(void *old_ptr, size_t new_size) {
         myfree(old_ptr);
         return NULL;
     } else {
-        Header *old_head = GET_HEADER(old_ptr);
-        size_t old_size = GET_SIZE(old_head);
-        void * new_ptr = mymalloc(new_size); // updating of new header done in malloc
-        if (new_ptr == NULL) { //realloc failed
-            return NULL;
+        Header *cur_head = GET_HEADER(old_ptr);
+        Header *next_head = GET_NEXT_HEADER(cur_head);
+        ListPointers *next_lp = GET_LISTPOINTERS(next_head);
+        size_t old_size = GET_SIZE(cur_head);
+        new_size = roundup(new_size + HEADER_SIZE, ALIGNMENT);
+        // def  can in-place reallocation
+        if (new_size <= old_size) {
+            if ((old_size - new_size) < MIN_BLOCK_SIZE) {
+            // smaller free block can't be made
+                return old_ptr; //keep same address
+
+            } else { //create smaller free blocks
+                SET_HEADER(cur_head, new_size + 1);
+
+                start->prev = next_head;
+                next_lp->next = base;
+                next_lp->prev = NULL;
+                base = next_head;
+                start = GET_LISTPOINTERS(base);
+                return old_ptr;
+            }
+        } else { //maybe can in-place realloc if coaslesce but maybe not
+            
+        
+            while (next_head && !GET_USED(next_head)) {
+                
+                ListPointers *cur = GET_LISTPOINTERS(cur_head);
+               
+                merge(cur, next_lp);
+                cur_head = GET_HEADER(cur);
+                new_size = GET_SIZE(cur_head);
+                if (new_size <= old_size) { //can be in-place realloced
+                    return cur_head;
+                }
+                //otherwise: update variables and try again
+                cur_head = next_head;
+                next_head = GET_NEXT_HEADER(next_head);
+
+            }
+            //can't be inplace realloced; must malloc
+     
+           
+            void *new_ptr = mymalloc(new_size); // updating of new header done in malloc
+            if (new_ptr == NULL) { //realloc failed
+                return NULL;
+            }
+            memcpy(new_ptr, old_ptr, old_size);
+            myfree(old_ptr);
+            return new_ptr;
         }
-        if (new_size < old_size) {
-            old_size = new_size;
-        }
-        memcpy(new_ptr, old_ptr, old_size);
-        myfree(old_ptr);
-        return new_ptr;
+  
     }
-    //  return NULL;
 }
 
 // merges/coalesces a block and the block to the right, which is
@@ -251,6 +294,7 @@ void merge(ListPointers *lp_ptr, ListPointers *lp_next) {
     lp_next->next = NULL;
     lp_next->prev = NULL;
 }
+ 
 bool validate_heap() {
     /* TODO: remove the line below and implement this to 
      * check your internal structures!
