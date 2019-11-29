@@ -173,7 +173,7 @@ void myfree(void *ptr) {
         ListPointers *next_lp = GET_LISTPOINTERS(next_head);
         merge(ptr_lp, next_lp);
         //next_head = (Header *)((char*)head + GET_SIZE(head));
-    } else { // if no merging, put  new free  ptr at front of linked list
+    } else { // if no merging, put  new free  ptr at front of linked list (LIFO)
         ListPointers *first = GET_LISTPOINTERS(base);
         first->prev = head;
         ptr_lp->next = base;
@@ -184,7 +184,7 @@ void myfree(void *ptr) {
     SET_UNUSED(head);
     nused -= (GET_SIZE(head) - HEADER_SIZE);
 
-    //  use LIFO when 
+  
   
 }
 
@@ -197,6 +197,7 @@ void *myrealloc(void *old_ptr, size_t new_size) {
         
     } else if (old_ptr != NULL && new_size == 0) { 
         myfree(old_ptr);
+        return NULL;
     } else {
         Header *old_head = GET_HEADER(old_ptr);
         size_t old_size = GET_SIZE(old_head);
@@ -211,7 +212,7 @@ void *myrealloc(void *old_ptr, size_t new_size) {
         myfree(old_ptr);
         return new_ptr;
     }
-    return NULL;
+    //  return NULL;
 }
 
 // merges/coalesces a block and the block to the right, which is
