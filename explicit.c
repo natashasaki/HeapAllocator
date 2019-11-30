@@ -31,7 +31,7 @@
 //possibly change
 #define GET_NEXT_HEADER(p) (Header*)((char*)p + GET_SIZE(p))
 
-#define GET_LISTPOINTERS(p) (ListPointers *)(p + 1)
+#define GET_LISTPOINTERS(p) (ListPointers *)((Header*)p + 1)
 //#define GET_NEXT_PTR(p) GET_LISTPOINTERS(p)->next
 //#define GET_PREV_PTR(p) GET_LISTPOINTERS(p)->prev
 #define SET_NEXT_PTR(p1, p2) p1->next = p2->next
@@ -118,10 +118,11 @@ void *mymalloc(size_t requested_size) {
 
         // update pointers
         ListPointers *lp_best_blk = GET_LISTPOINTERS(best_blk_head);
+        if (lp_best_blk->next) {
         ListPointers *next_blk = GET_LISTPOINTERS(lp_best_blk->next);
         next_blk->prev = lp_best_blk->prev;
         (GET_LISTPOINTERS(lp_best_blk->prev))->next = lp_best_blk->next;
-        
+        }
         size_t best_blk_size = GET_SIZE(best_blk_head);
         SET_USED(best_blk_head);
         block = GET_MEMORY(best_blk_head);  //best_blk_head + 1;
