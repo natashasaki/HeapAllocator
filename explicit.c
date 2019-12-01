@@ -15,6 +15,8 @@
 #include "allocator.h"
 #include "debug_break.h"
 #include <string.h>
+#include <stdio.h>
+
 
 #define HEADER_SIZE 8
 #define MIN_BLOCK_SIZE HEADER_SIZE + sizeof(ListPointers)
@@ -50,20 +52,33 @@ typedef struct pointers {
 } ListPointers;
 
 // global variable for  start of linked list
-static void *segment_start;
+static Header *segment_start;
 static size_t nused;
 static size_t segment_size;
 static Header *base; //start node
-ListPointers *start;
+static ListPointers *start;
+static Header *top;
 
 //helper function header
 Header *find_best_header(Header ** cur_head, size_t size);
 void merge(ListPointers  *lp_ptr, ListPointers *lp_next);
+size_t adjust_block_size(size_t size);
+void print_heap();
 
 // rounds up sz to closest multiple of mult
 size_t roundup(size_t sz, size_t mult) {
     return (sz + mult - 1) & ~(mult - 1);
 }
+
+
+size_t adjusted_block_size(size_t size) {
+    if((size + HEADER_SIZE) < MIN_BLOCK_SIZE) {
+        return MIN_BLOCK_SIZE;
+    } else {
+        return roundup(size + HEADER_SIZE, ALIGNMENT);
+    }
+}
+
 
 // initialize the heap and return the  status of this
 // initialization
@@ -81,117 +96,174 @@ bool myinit(void *heap_start, size_t heap_size) {
     if (heap_size < MIN_BLOCK_SIZE) { 
         return false;
     }
+
     
     segment_start = heap_start;
     segment_size = heap_size;
     nused = 0;
-    base = segment_start;
-    (*base).sa_bit = 0; //clear heap by allowing overwrite
+    top  = segment_start;
+    memset(segment_start,0, segment_size);
+           
+    //Header* s = segment_start;
+    (*top).sa_bit = 0;
+    base = NULL;
+    //(*base).sa_bit = 0; //clear heap by allowing overwrite
     start  = GET_LISTPOINTERS(base);
-    start->prev = NULL;
-    start->next = NULL;
+    //start->prev = NULL;
+    // start->next = NULL;
     
     return true;
 }
 
-// Malloc function that uses best fit to determine utilization of blocks. Implemented using a linked
-// list of structs containing a pointer to the header and apointer to  the next node
-void *mymalloc(size_t requested_size) {
-    size_t req_size = roundup(requested_size, ALIGNMENT);
-    size_t total_size = req_size  + HEADER_SIZE; // header is a multiple of alignment
 
-    if (total_size < MIN_BLOCK_SIZE) { //all blocks must have enough space to store header & ptrs
-        total_size = MIN_BLOCK_SIZE;
-    }
+void *mymalloc(size_t requested_size) {
+     size_t req_size = roundup(requested_size, ALIGNMENT);
+    size_t total_size = adjusted_block_size(requested_size);
     
     if (requested_size == 0 || requested_size > MAX_REQUEST_SIZE ||
-        (req_size + nused > segment_size)) {
+         (req_size + nused > segment_size)) {
+      
         return NULL;
     }
 
     Header *next_head_loc;
     void *block;
-    Header *cur_head = base;
+    Header *cur_head;
     Header *best_blk_head = find_best_header(&cur_head, total_size);
     
     if (best_blk_head != NULL) { // usable block found
 
         // update pointers
         ListPointers *lp_best_blk = GET_LISTPOINTERS(best_blk_head);
-        if (lp_best_blk->next) {
-        ListPointers *next_blk = GET_LISTPOINTERS(lp_best_blk->next);
-        next_blk->prev = lp_best_blk->prev;
-        (GET_LISTPOINTERS(lp_best_blk->prev))->next = lp_best_blk->next;
+        if (lp_best_blk->next) { // true if more than 1 blk if  the  blk is not end
+            ListPointers *next_blk = GET_LISTPOINTERS(lp_best_blk->next);
+            next_blk->prev = lp_best_blk->prev;
+
+            if (next_blk->prev) { // if not at fro
+                (GET_LISTPOINTERS(lp_best_blk->prev))->next = lp_best_blk->next;
+            }
+        } else {
+            if (lp_best_blk->prev) {
+                (GET_LISTPOINTERS(lp_best_blk->prev))->next = NULL;
+            }
         }
         size_t best_blk_size = GET_SIZE(best_blk_head);
         SET_USED(best_blk_head);
-        block = GET_MEMORY(best_blk_head);  //best_blk_head + 1;
+
+        if (best_blk_head == base) {
+        base = (GET_LISTPOINTERS(base))->next;
+        start = GET_LISTPOINTERS(base);
+
+        }
+        block = GET_MEMORY(best_blk_head);  //best_blk_head + 1
         nused += (best_blk_size - HEADER_SIZE);
         return block;
         
     } else { // new allocation
         size_t header = total_size + 1;
-        next_head_loc = GET_NEXT_HEADER(cur_head);
-        SET_HEADER(next_head_loc, header);
+     //   if (cur_head == base) {
+      //      cur_head = segment_start;
+        //}
+        SET_HEADER(cur_head,header);
+       // next_head_loc = GET_NEXT_HEADER(cur_head);
+      //  SET_HEADER(next_head_loc, header);
         nused += total_size;
-        block = GET_MEMORY(next_head_loc);
+       // block = GET_MEMORY(next_head_loc);
+        block =  GET_MEMORY(cur_head);
         return block;
     }
     return NULL;
 }
 
-// function that searches for a free, usable block of at least
-// total_size  using best-fit (block with lowest amt of enough free space)
+// FUNCTION THAT SEARCHES FOR A FREE, USABLE BLOCK OF AT LEAST
+// TOTAL_SIZE  USING BEST-FIT (BLOCK WITH LOWEST AMT OF ENOUGH FREE SPACE)
 Header *find_best_header(Header** cur_head_ad, size_t total_size) {
-    size_t best_blk_size = segment_size; //set to some max value
+    size_t best_blk_size = segment_size; //SET TO SOME MAX VALUE
     Header *best_blk_head = NULL; 
-    Header *cur_head = *cur_head_ad;
-    size_t cur_blk_size = GET_SIZE(*cur_head_ad);
-    
-    while(cur_blk_size != 0) {  
+    Header *cur_head = base;
+    ListPointers *old_lp = GET_LISTPOINTERS(cur_head);
+    if (cur_head == NULL) {
+        cur_head = top;
+        while(GET_SIZE(cur_head)) {
+            cur_head = GET_NEXT_HEADER(cur_head);
+        }
+        *cur_head_ad = cur_head;
+        return NULL;
+    }
+    size_t cur_blk_size = GET_SIZE(cur_head);
+    int i = 0;
+    while((i ==0) || (old_lp->next)) {  
+        cur_blk_size = GET_SIZE(cur_head);
         if(cur_blk_size >= total_size && !GET_USED(cur_head)) {
             if((cur_blk_size < best_blk_size) || (best_blk_head == NULL)) {
                 best_blk_head = cur_head;
                 best_blk_size = cur_blk_size;
             }
         }
-        cur_head = GET_NEXT_HEADER(cur_head);
-        cur_blk_size = GET_SIZE(cur_head);
+        i++;
+        old_lp = GET_LISTPOINTERS(cur_head);
+        cur_head = old_lp->next;
+        
+       // cur_blk_size = GET_SIZE(cur_head);
     }
-    *cur_head_ad = cur_head; // make sure current node in mymalloc is updated
+    if (!best_blk_head) {
+        cur_head = top;
+        while(GET_SIZE(cur_head)) {
+            cur_head = GET_NEXT_HEADER(cur_head);
+        }
+        *cur_head_ad = cur_head;
+       
+    }
+    *cur_head_ad = cur_head; // MAKE SURE CURRENT NODE IN MYMALLOC IS UPDATED
     return best_blk_head;
 }
     
-// this function "frees"  memory by clearing the lowest bit in the header (where use of
-// block  is stored) for future resuse
+// THIS FUNCTION "FREES"  MEMORY BY CLEARING THE LOWEST BIT IN THE HEADER (WHERE USE OF
+// BLOCK  IS STORED) FOR FUTURE RESUSE
 void myfree(void *ptr) {
     if (ptr == NULL) {
         return;
     }
     Header *head = GET_HEADER(ptr);
+    nused -= (GET_SIZE(head) - HEADER_SIZE);
+
     
-    Header *next_head = (Header *)((char*)head + GET_SIZE(head));
     ListPointers *ptr_lp = GET_LISTPOINTERS(head);
-    
-    //need  to continuously  coaslesce? will it even enter this case or max
-    //one merge?
-    if (next_head && !GET_USED(next_head)) { // coalescing
-        ListPointers *next_lp = GET_LISTPOINTERS(next_head);
+ 
+   // Header *next_head = GET_NEXT_HEADER(head);
+  
+    //  if (base && next_head && GET_SIZE(next_head) && !GET_USED(next_head)) { // coalescing
+    if (base && GET_NEXT_HEADER(head) && GET_SIZE((GET_NEXT_HEADER(head))) && !GET_USED((GET_NEXT_HEADER(head))) ) {
+
+        ListPointers *next_lp = GET_LISTPOINTERS((GET_NEXT_HEADER(head)));
+      //  ListPointers *next_lp = GET_LISTPOINTERS(next_head);
         merge(ptr_lp, next_lp);
+
+        //check if need
+     //   base = head;
+     //   start = ptr_lp;
         //next_head = (Header *)((char*)head + GET_SIZE(head));
     } else { // if no merging, put  new free  ptr at front of linked list (LIFO)
-        
-        start->prev = head;
-        ptr_lp->next = base;
-        ptr_lp->prev = NULL;
-        base = head;
-        start = GET_LISTPOINTERS(base);
+        if (!base) {
+            base = head;
+            start = GET_LISTPOINTERS(head);
+            
+          //  SET_HEADER(next_head, 0);
+            start->prev = NULL;
+            start->next = NULL;
+            // } else if (base == head) {
+            
+        } else {
+            start->prev = head;
+            ptr_lp->next = base;
+            ptr_lp->prev = NULL;
+            base = head;
+            start = GET_LISTPOINTERS(base);
+        }
     }
 
     SET_UNUSED(head);
-    nused -= (GET_SIZE(head) - HEADER_SIZE);
 
-  
 }
 
 // myrealloc moves memory to new location with the new size and copies
@@ -205,38 +277,48 @@ void *myrealloc(void *old_ptr, size_t new_size) {
         myfree(old_ptr);
         return NULL;
     } else {
+        
         Header *cur_head = GET_HEADER(old_ptr);
+        size_t old_size = GET_SIZE(cur_head);
         Header *next_head = GET_NEXT_HEADER(cur_head);
         ListPointers *next_lp = GET_LISTPOINTERS(next_head);
-        size_t old_size = GET_SIZE(cur_head);
-        new_size = roundup(new_size + HEADER_SIZE, ALIGNMENT);
+        nused -= (old_size - HEADER_SIZE);
+        size_t adjusted_size = adjusted_block_size(new_size);
+     
         // def  can in-place reallocation
-        if (new_size <= old_size) {
-            if ((old_size - new_size) < MIN_BLOCK_SIZE) {
-            // smaller free block can't be made
-                return old_ptr; //keep same address
-
-            } else { //create smaller free blocks
-                SET_HEADER(cur_head, new_size + 1);
-
-                start->prev = next_head;
-                next_lp->next = base;
-                next_lp->prev = NULL;
-                base = next_head;
-                start = GET_LISTPOINTERS(base);
-                return old_ptr;
-            }
+        if (adjusted_size <= old_size) {
+            //   if ((old_size - adjusted_size) < MIN_BLOCK_SIZE) {
+                nused += (old_size - HEADER_SIZE);
+                //  next_head  = NULL;
+                // smaller free block can't be made
+                //  SET_HEADER(next_head, 0);
+                return GET_MEMORY(cur_head);
+                //   return old_ptr; //keep same address
+                //    }
+                //     } else { //create smaller free blocks
+                //         SET_HEADER(cur_head, adjusted_size + 1);
+                //         next_head = GET_NEXT_HEADER(cur_head);
+                //         next_lp = GET_LISTPOINTERS(next_head);
+                //         start->prev = next_head;
+                //        next_lp->next = base;
+                //       next_lp->prev = NULL;
+                //       base = next_head;
+                //       start = GET_LISTPOINTERS(base);
+                //      nused += (adjusted_size -  HEADER_SIZE);
+                //      return old_ptr;
+                //   }
         } else { //maybe can in-place realloc if coaslesce but maybe not
-            
-        
-            while (next_head && !GET_USED(next_head)) {
+          
+            next_head = GET_NEXT_HEADER(cur_head);
+            while (next_head && GET_SIZE(next_head) != 0 && !GET_USED(next_head)) {
                 
                 ListPointers *cur = GET_LISTPOINTERS(cur_head);
-               
+
                 merge(cur, next_lp);
                 cur_head = GET_HEADER(cur);
                 new_size = GET_SIZE(cur_head);
                 if (new_size <= old_size) { //can be in-place realloced
+                    nused += (old_size - HEADER_SIZE);
                     return cur_head;
                 }
                 //otherwise: update variables and try again
@@ -283,6 +365,10 @@ void merge(ListPointers *lp_ptr, ListPointers *lp_next) {
     //  ListPointers *lp_next = GET_LISTPOINTERS(next_h);
     
     //SET_NEXT_PTR(h1, next_h);
+    if (next_h == base) {
+        base = GET_HEADER(lp_ptr);
+        start = lp_ptr;
+    }
     lp_ptr->next = lp_next->next;
     lp_ptr->prev = lp_next->prev;
   
@@ -290,6 +376,10 @@ void merge(ListPointers *lp_ptr, ListPointers *lp_next) {
         ListPointers *lp_new_next = GET_LISTPOINTERS(lp_next->next);
         lp_new_next->prev = ptr_h;
        
+    }
+    if (lp_ptr->prev) {
+        ListPointers *lp_before = GET_LISTPOINTERS(lp_ptr->prev);
+        lp_before->next = ptr_h;
     }
     
     lp_next->next = NULL;
@@ -305,9 +395,44 @@ bool validate_heap() {
      * You can also use the breakpoint() function to stop
      * in the debugger - e.g. if (something_is_wrong) breakpoint();
      */
+    
+    //  if(!base)  {
+    //    return false;
+    //    }
 
-    if(!base)  {
-        return false;
-    }
+ //  print_linked_list;
+
+  // Header *s = segment_start;
+ //   if (GET_SIZE(s)) {
+    
+ //        print_heap();
+ //   }
+
+  //  printf("\n\n\n");
     return true;
+}
+
+void print_linked_list() {
+    printf("linked list: \n");
+    Header* cur = base;
+    if (cur) {
+        while ((GET_LISTPOINTERS(cur))->next) {
+            printf("Header Address: %p   ; Header: %lu\n", cur, GET(cur));
+            cur = (GET_LISTPOINTERS(cur))->next;
+        }
+        
+        printf("Header Address: %p   ; Header: %lu", cur, GET(cur));
+        printf("\n\n");
+    }
+}
+void print_heap() {
+    Header *cur = segment_start;
+    printf("Print entire heap: \n");
+
+    if (GET_SIZE(cur) != 0) {
+        while(cur && GET_SIZE(cur)) {
+            printf("Header Address: %p ; Header: %lu\n", cur, GET(cur));
+            cur = GET_NEXT_HEADER(cur);
+        }
+    }
 }
