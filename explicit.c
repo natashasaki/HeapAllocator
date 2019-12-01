@@ -126,7 +126,7 @@ void *mymalloc(size_t requested_size) {
         return NULL;
     }
 
-    Header *next_head_loc;
+   // Header *next_head_loc;
     void *block;
     Header *cur_head;
     Header *best_blk_head = find_best_header(&cur_head, total_size);
