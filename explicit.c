@@ -64,6 +64,7 @@ Header *find_best_header(Header ** cur_head, size_t size);
 void merge(ListPointers  *lp_ptr, ListPointers *lp_next);
 size_t adjust_block_size(size_t size);
 void print_heap();
+void print_linked_list();
 
 // rounds up sz to closest multiple of mult
 size_t roundup(size_t sz, size_t mult) {
@@ -269,7 +270,7 @@ void myfree(void *ptr) {
 // myrealloc moves memory to new location with the new size and copies
 // over data from old pointer and frees the old_ptr
 void *myrealloc(void *old_ptr, size_t new_size) {
-    
+    // breakpoint();
     if (old_ptr == NULL) {
         return mymalloc(new_size); //nothing to copy over
         
@@ -284,7 +285,11 @@ void *myrealloc(void *old_ptr, size_t new_size) {
         ListPointers *next_lp = GET_LISTPOINTERS(next_head);
         nused -= (old_size - HEADER_SIZE);
         size_t adjusted_size = adjusted_block_size(new_size);
-     
+        
+        char temp_data[old_size];
+        char* temp = &temp_data[0];
+        
+        memcpy(temp, old_ptr, old_size);
         // def  can in-place reallocation
         if (adjusted_size <= old_size) {
             //   if ((old_size - adjusted_size) < MIN_BLOCK_SIZE) {
@@ -292,6 +297,7 @@ void *myrealloc(void *old_ptr, size_t new_size) {
                 //  next_head  = NULL;
                 // smaller free block can't be made
                 //  SET_HEADER(next_head, 0);
+                memcpy(GET_MEMORY(cur_head), old_ptr, new_size);
                 return GET_MEMORY(cur_head);
                 //   return old_ptr; //keep same address
                 //    }
@@ -308,33 +314,38 @@ void *myrealloc(void *old_ptr, size_t new_size) {
                 //      return old_ptr;
                 //   }
         } else { //maybe can in-place realloc if coaslesce but maybe not
-          
+            
+            // memset(temp, 0 ,  old_size);
+            // memcpy(temp, old_ptr, old_size);
+            
             next_head = GET_NEXT_HEADER(cur_head);
+            ListPointers *cur = GET_LISTPOINTERS(cur_head);
             while (next_head && GET_SIZE(next_head) != 0 && !GET_USED(next_head)) {
-                
-                ListPointers *cur = GET_LISTPOINTERS(cur_head);
-
+               
+                next_lp = GET_LISTPOINTERS(next_head);
                 merge(cur, next_lp);
+                //  breakpoint();
                 cur_head = GET_HEADER(cur);
                 new_size = GET_SIZE(cur_head);
                 if (new_size <= old_size) { //can be in-place realloced
                     nused += (old_size - HEADER_SIZE);
-                    return cur_head;
+                    memcpy(old_ptr,temp , old_size);
+                    return old_ptr;
                 }
                 //otherwise: update variables and try again
-                cur_head = next_head;
+                // cur_head = next_head;
                 next_head = GET_NEXT_HEADER(next_head);
 
             }
+            
             //can't be inplace realloced; must malloc
-     
-           
+            //   breakpoint();
             void *new_ptr = mymalloc(new_size); // updating of new header done in malloc
             if (new_ptr == NULL) { //realloc failed
                 return NULL;
             }
-            memcpy(new_ptr, old_ptr, old_size);
-            myfree(old_ptr);
+            memcpy(new_ptr, temp, old_size);
+            //    myfree(old_ptr);
             return new_ptr;
         }
   
@@ -400,15 +411,15 @@ bool validate_heap() {
     //    return false;
     //    }
 
- //  print_linked_list;
+    // print_linked_list();
 
-  // Header *s = segment_start;
- //   if (GET_SIZE(s)) {
+    Header *s = segment_start;
+    if (GET_SIZE(s)) {
     
- //        print_heap();
- //   }
+        //  print_heap();
+    }
 
-  //  printf("\n\n\n");
+    //printf("\n\n\n");
     return true;
 }
 
@@ -418,7 +429,7 @@ void print_linked_list() {
     if (cur) {
         while ((GET_LISTPOINTERS(cur))->next) {
             printf("Header Address: %p   ; Header: %lu\n", cur, GET(cur));
-            cur = (GET_LISTPOINTERS(cur))->next;
+            cur = (GET_LISTPOINTERS(cur))->next; //header
         }
         
         printf("Header Address: %p   ; Header: %lu", cur, GET(cur));
