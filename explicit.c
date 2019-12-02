@@ -185,6 +185,7 @@ Header *find_best_header(Header** cur_head_ad, size_t total_size) {
     ListPointers *old_lp = GET_LISTPOINTERS(cur_head);
     if (cur_head == NULL) {
         cur_head = top;
+        
         while(GET_SIZE(cur_head)) {
             cur_head = GET_NEXT_HEADER(cur_head);
         }
@@ -193,7 +194,7 @@ Header *find_best_header(Header** cur_head_ad, size_t total_size) {
     }
     size_t cur_blk_size = GET_SIZE(cur_head);
     int i = 0;
-    while((i ==0) || (old_lp->next)) {  
+    while((i == 0) || (old_lp->next)) {  
         cur_blk_size = GET_SIZE(cur_head);
         if(cur_blk_size >= total_size && !GET_USED(cur_head)) {
             if((cur_blk_size < best_blk_size) || (best_blk_head == NULL)) {
@@ -396,21 +397,9 @@ void merge(ListPointers *lp_ptr, ListPointers *lp_next) {
     lp_next->next = NULL;
     lp_next->prev = NULL;
 }
- 
-bool validate_heap() {
-    /* TODO: remove the line below and implement this to 
-     * check your internal structures!
-     * Return true if all is ok, or false otherwise.
-     * This function is called periodically by the test
-     * harness to check the state of the heap allocator.
-     * You can also use the breakpoint() function to stop
-     * in the debugger - e.g. if (something_is_wrong) breakpoint();
-     */
-    
-    //  if(!base)  {
-    //    return false;
-    //    }
 
+// some functions to trace the  heap and check if  output  is right
+bool validate_heap() {
     // print_linked_list();
 
     Header *s = segment_start;

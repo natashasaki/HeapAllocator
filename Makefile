@@ -7,7 +7,7 @@
 # (e.g. different levels and enabling/disabling specific optimizations)
 bump.o: CFLAGS += -O2
 implicit.o: CFLAGS += -O2
-explicit.o: CFLAGS += -O0
+explicit.o: CFLAGS += -O2
 
 ALLOCATORS = bump implicit explicit
 PROGRAMS = $(ALLOCATORS:%=test_%)
