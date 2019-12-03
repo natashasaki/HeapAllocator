@@ -191,7 +191,7 @@ void *mymalloc(size_t requested_size) {
 // FUNCTION THAT SEARCHES FOR A FREE, USABLE BLOCK OF AT LEAST
 // TOTAL_SIZE  USING BEST-FIT (BLOCK WITH LOWEST AMT OF ENOUGH FREE SPACE)
 Header *find_best_header(Header** cur_head_ad, size_t total_size) {
-    size_t best_blk_size = segment_size; //SET TO SOME MAX VALUE
+    // size_t best_blk_size = segment_size; //SET TO SOME MAX VALUE
     Header *best_blk_head = NULL; 
     Header *cur_head = *cur_head_ad;
     // breakpoint();
@@ -214,13 +214,14 @@ Header *find_best_header(Header** cur_head_ad, size_t total_size) {
     while((i == 0) || (old_lp->next)) {  
         cur_blk_size = GET_SIZE(cur_head);
         if(cur_blk_size >= total_size && !GET_USED(cur_head)) {
-            if((cur_blk_size < best_blk_size) || (best_blk_head == NULL)) {
+            //  if((cur_blk_size < best_blk_size) || (best_blk_head == NULL)) {
                 best_blk_head = cur_head;
-                best_blk_size = cur_blk_size;
-            }
+                // best_blk_size = cur_blk_size;
+                return best_blk_head;
+                //   }
         }
         i++;
-         old_lp = GET_LISTPOINTERS(cur_head); 
+        old_lp = GET_LISTPOINTERS(cur_head); 
         cur_head = old_lp->next;
         
         // cur_blk_size = GET_SIZE(cur_head);
