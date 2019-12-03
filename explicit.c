@@ -62,7 +62,7 @@ static Header *top;
 static Header *end;
 
 //helper function header
-Header *find_best_header(Header ** cur_head, size_t size);
+Header *find_best_header(Header *cur_head, size_t size);
 void merge(ListPointers  *lp_ptr, ListPointers *lp_next);
 size_t adjust_block_size(size_t size);
 void print_heap();
@@ -134,7 +134,7 @@ void *mymalloc(size_t requested_size) {
    // Header *next_head_loc;
     void *block;
     Header *cur_head= base;
-    Header *best_blk_head = find_best_header(&cur_head, total_size);
+    Header *best_blk_head = find_best_header(base, total_size);
     
     if (best_blk_head != NULL) { // usable block found
 
@@ -190,10 +190,10 @@ void *mymalloc(size_t requested_size) {
 
 // FUNCTION THAT SEARCHES FOR A FREE, USABLE BLOCK OF AT LEAST
 // TOTAL_SIZE  USING BEST-FIT (BLOCK WITH LOWEST AMT OF ENOUGH FREE SPACE)
-Header *find_best_header(Header** cur_head_ad, size_t total_size) {
+Header *find_best_header(Header* cur_head, size_t total_size) {
     // size_t best_blk_size = segment_size; //SET TO SOME MAX VALUE
     Header *best_blk_head = NULL; 
-    Header *cur_head = *cur_head_ad;
+    // Header *cur_head = *cur_head_ad;
     // breakpoint();
     if (cur_head == NULL) {
         // cur_head = top;
@@ -388,9 +388,10 @@ void *myrealloc(void *old_ptr, size_t new_size) {
                                 
                             } else {  // case 4
                                 base = NULL;
-                                start = GET_LISTPOINTERS(base);
-                                start->prev =  NULL;
-                                start->next = NULL;
+                                start  = NULL;
+                                //start = GET_LISTPOINTERS(base);
+                                //  start->prev =  NULL;
+                                // start->next = NULL;
                             }
                         }   
                         memcpy(old_ptr, temp, old_size);
@@ -481,7 +482,7 @@ bool validate_heap() {
     //    print_linked_list();
 
     Header *s = segment_start;
-    if (GET_SIZE(s)) {
+     if (GET_SIZE(s)) {
     
         //    print_heap();
     }
