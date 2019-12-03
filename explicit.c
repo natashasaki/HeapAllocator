@@ -336,8 +336,6 @@ void *myrealloc(void *old_ptr, size_t new_size) {
                 //   }
         } else { //maybe can in-place realloc if coaslesce but maybe not
             size_t updated_block_size = old_size;
-            // memset(temp, 0 ,  old_size);
-            // memcpy(temp, old_ptr, old_size);
             bool reached_end = false;
            
             ListPointers *cur = GET_LISTPOINTERS(cur_head);
