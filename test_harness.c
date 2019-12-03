@@ -349,6 +349,7 @@ static void *eval_realloc(int req, size_t requested_size, script_t *script,
  */
 static bool verify_block(void *ptr, size_t size, script_t *script, int lineno) {
     // address must be ALIGNMENT-byte aligned
+    
     if (((uintptr_t)ptr) % ALIGNMENT != 0) {
         allocator_error(script, lineno, "New block (%p) not aligned to %d bytes",
                         ptr, ALIGNMENT);
