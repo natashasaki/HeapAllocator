@@ -100,12 +100,11 @@ bool myinit(void *heap_start, size_t heap_size) {
         return false;
     }
 
-    
     segment_start = heap_start;
     segment_size = heap_size;
     nused = 0;
-    top  = segment_start;
-    memset(segment_start,0, segment_size);
+    top = segment_start;
+    //  memset(segment_start,0, segment_size);
            
     //Header* s = segment_start;
     (*top).sa_bit = 0;
@@ -113,7 +112,7 @@ bool myinit(void *heap_start, size_t heap_size) {
     
     base = NULL;
     //(*base).sa_bit = 0; //clear heap by allowing overwrite
-    start  = GET_LISTPOINTERS(base);
+    start = NULL;
     //start->prev = NULL;
     // start->next = NULL;
     
@@ -122,18 +121,16 @@ bool myinit(void *heap_start, size_t heap_size) {
 
 
 void *mymalloc(size_t requested_size) {
-     size_t req_size = roundup(requested_size, ALIGNMENT);
+    size_t req_size = roundup(requested_size, ALIGNMENT);
     size_t total_size = adjusted_block_size(requested_size);
     
     if (requested_size == 0 || requested_size > MAX_REQUEST_SIZE ||
-         (req_size + nused > segment_size)) {
-      
+        (req_size + nused > segment_size)) {
         return NULL;
     }
 
-   // Header *next_head_loc;
-    void *block;
-    Header *cur_head= base;
+    void *block; //block to be returned
+    Header *cur_head = base;
     Header *best_blk_head = find_best_header(base, total_size);
     
     if (best_blk_head != NULL) { // usable block found
@@ -170,18 +167,13 @@ void *mymalloc(size_t requested_size) {
         } else {
             cur_head = GET_NEXT_HEADER(end);
             end = cur_head;
-           
         }
         
         size_t header = total_size + 1;
-     //   if (cur_head == base) {
-      //      cur_head = segment_start;
-        //}
         SET_HEADER(cur_head,header);
        // next_head_loc = GET_NEXT_HEADER(cur_head);
       //  SET_HEADER(next_head_loc, header);
         nused += total_size;
-       // block = GET_MEMORY(next_head_loc);
         block =  GET_MEMORY(cur_head);
         return block;
     }
@@ -196,12 +188,6 @@ Header *find_best_header(Header* cur_head, size_t total_size) {
     // Header *cur_head = *cur_head_ad;
     // breakpoint();
     if (cur_head == NULL) {
-        // cur_head = top;
-        
-        //   while(cur_head != end) {
-        //      cur_head = GET_NEXT_HEADER(cur_head);
-        //   }
-        //   *cur_head_ad = cur_head;
         return NULL;
     }
     
@@ -218,64 +204,41 @@ Header *find_best_header(Header* cur_head, size_t total_size) {
                 best_blk_head = cur_head;
                 // best_blk_size = cur_blk_size;
                 return best_blk_head;
-                //   }
         }
         i++;
         old_lp = GET_LISTPOINTERS(cur_head); 
         cur_head = old_lp->next;
-        
-        // cur_blk_size = GET_SIZE(cur_head);
     }
-    // if (!best_blk_head) {
-        //  cur_head  = end; //GET_NEXT_HEADER(end);
-        //  cur_head = top;
-        //    while(GET_SIZE(cur_head)) {
-        //       cur_head = GET_NEXT_HEADER(cur_head);
-        //      }
-        //   *cur_head_ad = cur_head;
-       
-    // }
-//  *cur_head_ad = cur_head; // MAKE SURE CURRENT NODE IN MYMALLOC IS UPDATED
     return best_blk_head;
 }
     
 // THIS FUNCTION "FREES"  MEMORY BY CLEARING THE LOWEST BIT IN THE HEADER (WHERE USE OF
-// BLOCK  IS STORED) FOR FUTURE RESUSE
+// BLOCK IS STORED) FOR FUTURE RESUSE
 void myfree(void *ptr) {
     if (ptr == NULL) {
         return;
     }
+    
     Header *head = GET_HEADER(ptr);
     nused -= (GET_SIZE(head) - HEADER_SIZE);
-    
     ListPointers *ptr_lp = GET_LISTPOINTERS(head);
- 
-   // Header *next_head = GET_NEXT_HEADER(head);
-  
-    //  if (base && next_head && GET_SIZE(next_head) && !GET_USED(next_head)) { // coalescing
-    if (base && head != end && !GET_USED((GET_NEXT_HEADER(head))) ) {
-        ListPointers *next_lp = GET_LISTPOINTERS((GET_NEXT_HEADER(head)));
-      //  ListPointers *next_lp = GET_LISTPOINTERS(next_head);
-      //  breakpoint();
+    Header *next_head = GET_NEXT_HEADER(head);
+    if (base && head != end && !GET_USED(next_head)) { // coalescing
+        ListPointers *next_lp = GET_LISTPOINTERS(next_head);
+        //  breakpoint();
         merge(ptr_lp, next_lp);
         if (GET_HEADER(next_lp) == end) {
             end = head;
         }
-        //check if need
-     //   base = head;
-     //   start = ptr_lp;
-        //next_head = (Header *)((char*)head + GET_SIZE(head));
+    
     } else { // if no merging, put  new free  ptr at front of linked list (LIFO)
         if (!base) {
             base = head;
             start = GET_LISTPOINTERS(head);
-            
-          //  SET_HEADER(next_head, 0);
             start->prev = NULL;
             start->next = NULL;
-            // } else if (base == head) {
-            
-        } else {
+         
+        } else { 
             start->prev = head;
             ptr_lp->next = base;
             ptr_lp->prev = NULL;
@@ -283,15 +246,12 @@ void myfree(void *ptr) {
             start = GET_LISTPOINTERS(base);
         }
     }
-
     SET_UNUSED(head);
-
 }
 
 // myrealloc moves memory to new location with the new size and copies
 // over data from old pointer and frees the old_ptr
 void *myrealloc(void *old_ptr, size_t new_size) {
-    // breakpoint();
     if (old_ptr == NULL) {
         return mymalloc(new_size); //nothing to copy over
         
@@ -302,8 +262,8 @@ void *myrealloc(void *old_ptr, size_t new_size) {
         
         Header *cur_head = GET_HEADER(old_ptr);
         size_t old_size = GET_SIZE(cur_head);
-        Header *next_head;// = GET_NEXT_HEADER(cur_head);
-        ListPointers *next_lp;// = GET_LISTPOINTERS(next_head);
+        Header *next_head;
+        ListPointers *next_lp;
         nused -= (old_size - HEADER_SIZE);
         size_t adjusted_size = adjusted_block_size(new_size);
         
@@ -318,8 +278,8 @@ void *myrealloc(void *old_ptr, size_t new_size) {
                 //  next_head  = NULL;
                 // smaller free block can't be made
                 //  SET_HEADER(next_head, 0);
-                memcpy(GET_MEMORY(cur_head), old_ptr, new_size);
-                return GET_MEMORY(cur_head);
+                memmove(old_ptr, old_ptr, new_size);
+                return old_ptr;
                 //   return old_ptr; //keep same address
                 //    }
                 //     } else { //create smaller free blocks
@@ -342,18 +302,11 @@ void *myrealloc(void *old_ptr, size_t new_size) {
             int i = 0;
             if (cur_head != end) {
                 next_head = GET_NEXT_HEADER(cur_head);
-                // while ((i == 0 && !GET_USED(next_head)) || (
-                while ((i == 0 && !GET_USED(next_head)) || (!reached_end && GET_SIZE(next_head) != 0 && !GET_USED(next_head) && next_head)) {
+                while ((i == 0 && !GET_USED(next_head)) || (!reached_end && GET_SIZE(next_head) &&!GET_USED(next_head))) {
                     
                     next_lp = GET_LISTPOINTERS(next_head);
                     // breakpoint();
                     merge(cur, next_lp);
-                    
-                    //breakpoint();
-                    //merged =  true;
-                    //  breakpoint();
-                    //  cur_head = GET_HEADER(cur);
-                    // breakpoint();
                     updated_block_size = GET_SIZE(cur_head);
                     
                     if (next_head == end) {
@@ -383,7 +336,6 @@ void *myrealloc(void *old_ptr, size_t new_size) {
                                 base = cur->next;
                                 start = GET_LISTPOINTERS(base);
                                 (GET_LISTPOINTERS(cur->next))->prev = NULL;
-                                
                             } else {  // case 4
                                 base = NULL;
                                 start  = NULL;
@@ -395,9 +347,8 @@ void *myrealloc(void *old_ptr, size_t new_size) {
                         memcpy(old_ptr, temp, old_size);
                         return old_ptr;
                     }
+                    
                     //otherwise: update variables and try again
-                    // cur_head = next_head;
-                  
                     if (!reached_end) {
                         next_head = GET_NEXT_HEADER(next_head);
                     } else  {
@@ -414,14 +365,10 @@ void *myrealloc(void *old_ptr, size_t new_size) {
             if (new_ptr == NULL) { //realloc failed
                 return NULL;
             }
+            //  memcpy(new_ptr, temp, old_size);
             memcpy(new_ptr, temp, old_size);
-            //   if (!merged)   {
-            //       myfree(old_ptr);
-            //     }
-            //    myfree(old_ptr);
             return new_ptr;
         }
-  
     }
 }
 
@@ -479,18 +426,18 @@ void merge(ListPointers *lp_ptr, ListPointers *lp_next) {
 bool validate_heap() {
     //    print_linked_list();
 
-    Header *s = segment_start;
-     if (GET_SIZE(s)) {
+    // Header *s = segment_start;
+    //   if (GET_SIZE(s)) {
     
         //    print_heap();
-    }
+    //   }
 
     // printf("\n\n\n");
       return true;
 }
 
 void print_linked_list() {
-     printf("linked list: \n");
+    printf("linked list: \n");
     Header* cur = base;
     if (cur) {
         while ((GET_LISTPOINTERS(cur))->next) {
