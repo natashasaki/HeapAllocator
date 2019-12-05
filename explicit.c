@@ -56,6 +56,8 @@ void base_merging(ListPointers *cur_lp, ListPointers *next_lp, bool cur_allocate
 void end_merging(ListPointers *cur_lp, ListPointers *next_lp, Header* old_base);
 void make_smaller_block(Header *cur_head, size_t adjusted_size, size_t old_size);
 bool can_inplace_realloc(Header *cur_head, size_t new_size);
+bool check_alignment();
+bool check_heap_size();
 
 // rounds up sz to closest multiple of mult
 size_t roundup(size_t sz, size_t mult) {
@@ -455,14 +457,51 @@ bool validate_heap() {
     // }
 
     // printf("\n\n\n");
+    //breakpoint();
+    if (!check_alignment()) {
+        return false;
+    }
+    if (!check_heap_size()) {
+        return false;
+    }
+    
     return true;
+}
+
+// checks the alignment  of all of the blocks on the heap
+// return true if aligned, false otherwise
+bool check_alignment() {
+    Header *cur = top;
+    if (cur != end) {
+        while (cur != GET_NEXT_HEADER(end)) {
+            if (((unsigned long)cur & 7) != 0) {
+                return false;
+            }
+            cur = GET_NEXT_HEADER(cur);
+        }
+    }
+    return true;
+
+}
+
+// checks that all the blocks add up to the heap segment that
+// was initialized; false if not
+bool check_heap_size() {
+    Header *cur = top;
+    size_t sum_size = 0;
+    
+    while (cur != GET_NEXT_HEADER(end)) {
+        sum_size += GET_SIZE(cur);
+        cur = GET_NEXT_HEADER(cur);
+    }
+    return (sum_size == segment_size);
 }
 
 // prints header address and header info (ie total size and
 // allocation) of each free block starting at base
 void print_linked_list() {
     printf("linked list: \n");
-    Header* cur = base;
+    Header *cur = base;
     if (cur && cur != (Header*)((char*)top + segment_size)) {
         while ((GET_LISTPOINTERS(cur))->next) {
             printf("Header Address: %p   ; Header: %lu\n", cur, GET(cur));
