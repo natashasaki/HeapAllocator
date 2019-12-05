@@ -49,13 +49,13 @@ size_t adjust_block_size(size_t size);
 void print_heap();
 void print_linked_list();
 Header *make_new_allocation(size_t allocate_size);
-//Header *allocate_usable_block(Header* block_head);
 void allocate_usable_block(Header* block_head);
 Header *find_block_header(size_t size);
 void middle_merging(ListPointers *cur_lp, ListPointers *next_lp, bool cur_allocated);
 void base_merging(ListPointers *cur_lp, ListPointers *next_lp, bool cur_allocated);
 void end_merging(ListPointers *cur_lp, ListPointers *next_lp, Header* old_base);
 void make_smaller_block(Header *cur_head, size_t adjusted_size, size_t old_size);
+bool can_inplace_realloc(Header *cur_head, size_t new_size);
 
 // rounds up sz to closest multiple of mult
 size_t roundup(size_t sz, size_t mult) {
@@ -251,8 +251,6 @@ void *myrealloc(void *old_ptr, size_t new_size) {
     } else {
         Header *cur_head = GET_HEADER(old_ptr);
         size_t old_size = GET_SIZE(cur_head);
-        Header *next_head;
-        ListPointers *next_lp;
         nused -= old_size;
         size_t adjusted_size = adjusted_block_size(new_size);
         char temp_data[old_size]; 
@@ -262,56 +260,61 @@ void *myrealloc(void *old_ptr, size_t new_size) {
         }
         
         if (adjusted_size <= old_size) {   // guaranteed can in-place realloc
-            // case 1: adjusted size is big enough for old size but not for new block
-            // case 2: adjusted size is big enough to create smaller blocks
-      
             memmove(old_ptr, old_ptr, new_size);
-            if ((old_size - adjusted_size) < MIN_BLOCK_SIZE) { // case 1
+            if ((old_size - adjusted_size) < MIN_BLOCK_SIZE) { // too small for  new block
                 nused += old_size;
-            } else { // case 2
+            } else { // big enough to create smaller blocks
                 make_smaller_block(cur_head, adjusted_size, old_size);
                 nused += adjusted_size;
             }
             return old_ptr;
             
         } else { // possibly can in-place realloc if coaslesce but maybe not
-            size_t updated_block_size = old_size;
-            ListPointers *cur_lp = GET_LISTPOINTERS(cur_head);
-         
-            if (cur_head != end) {
-                next_head = GET_NEXT_HEADER(cur_head);
-             
-                while (next_head && !GET_USED(next_head)) { //keep merging until next not free
-                    next_lp = GET_LISTPOINTERS(next_head);
-                    merge(cur_lp, next_lp);
-                    updated_block_size = GET_SIZE(cur_head);
-                    
-                    if (next_head == end) {
-                        end = cur_head;
-                        break;
-                    }
-                    if ((new_size + HEADER_SIZE) <= updated_block_size) { //can be in-place realloced
-                        nused += updated_block_size;
-                        allocate_usable_block(cur_head);
-                        memcpy(old_ptr, temp, old_size);
-                        return old_ptr;
-                    }
-                    next_head = GET_NEXT_HEADER(cur_head); // try again
+            if (can_inplace_realloc(cur_head, new_size)) {
+                allocate_usable_block(cur_head);
+                memcpy(old_ptr, temp, old_size);
+                return old_ptr;
+            } else {  //can't be inplace realloced; must malloc
+                void *new_ptr = mymalloc(new_size);
+                nused += HEADER_SIZE; 
+                if (new_ptr == NULL) { //realloc failed
+                    return NULL;
                 }
+                memcpy(new_ptr, temp, old_size);
+                return new_ptr;
             }
-            //can't be inplace realloced; must malloc
-            void *new_ptr = mymalloc(new_size);
-            nused += HEADER_SIZE; 
-            if (new_ptr == NULL) { //realloc failed
-                return NULL;
-            }
-            memcpy(new_ptr, temp, old_size);
-            return new_ptr;
         }
     }
 }
 
+bool can_inplace_realloc(Header *cur_head, size_t new_size) {
+    size_t old_size = GET_SIZE(cur_head);
+    size_t updated_block_size = old_size;
+    ListPointers *lp_cur = GET_LISTPOINTERS(cur_head);
+    ListPointers *lp_next;
+    if (cur_head == end) {
+        return false;
+    }
+    Header *next_head = GET_NEXT_HEADER(cur_head);
+    while (next_head && !GET_USED(next_head)) {
+        lp_next = GET_LISTPOINTERS(next_head);
+        merge(lp_cur, lp_next);
+        updated_block_size = GET_SIZE(cur_head);
 
+        if (next_head == end) {
+            end = cur_head;
+            return false;
+        }
+        if ((new_size + HEADER_SIZE) <= updated_block_size) { //can be in-place realloced
+            nused += updated_block_size;
+            return true;
+        }
+        next_head = GET_NEXT_HEADER(cur_head); // try again
+    }
+    return false;  
+}
+
+    
 // function to make a smaller block if coalesced
 // block is big enough to create a smaller block
 void make_smaller_block(Header *cur_head, size_t adjusted_size, size_t old_size) {
