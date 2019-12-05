@@ -12,6 +12,7 @@
 #include "allocator.h"
 #include "debug_break.h"
 #include <string.h>
+#include <stdio.h>
 
 #define HEADER_SIZE 8
 
@@ -48,16 +49,7 @@ size_t roundup(size_t sz, size_t mult) {
 // initialize the heap and return the  status of this
 // initialization
 bool myinit(void *heap_start, size_t heap_size) {
-    /*  This must be called by a client before making any allocation
-     * requests.  The function returns true if initialization was 
-     * successful, or false otherwise. The myinit function can be 
-     * called to reset the heap to an empty state. When running 
-     * against a set of of test scripts, our test harness calls 
-     * myinit before starting each new script.
-     */
 
-    // does heap have to be bigger than header size? can you initialize knowing
-    // there is space for 0 blocks?
     if (heap_size < HEADER_SIZE) { 
         return false;
     }
@@ -75,15 +67,14 @@ bool myinit(void *heap_start, size_t heap_size) {
 void *mymalloc(size_t requested_size) {
     size_t req_size = roundup(requested_size, ALIGNMENT);
     size_t total_size = req_size  + HEADER_SIZE; // header is a multiple of alignment
+    Header *next_head_loc;
+    void *block;
+    Header *cur_head = base;
     
     if (requested_size == 0 || requested_size > MAX_REQUEST_SIZE ||
         (req_size + nused > segment_size)) {
         return NULL;
     }
-
-    Header *next_head_loc;
-    void *block;
-    Header *cur_head = base;
     Header *best_blk_head = find_best_header(&cur_head, total_size);
     
     if (best_blk_head != NULL) { // usable block found
@@ -112,7 +103,7 @@ Header *find_best_header(Header** cur_head_ad, size_t total_size) {
     Header *cur_head = *cur_head_ad;
     size_t cur_blk_size = GET_SIZE(*cur_head_ad);
     
-    while(cur_blk_size != 0) {  
+    while(cur_blk_size != 0) { // search all blocks
         if(cur_blk_size >= total_size && !GET_USED(cur_head)) {
             if((cur_blk_size < best_blk_size) || (best_blk_head == NULL)) {
                 best_blk_head = cur_head;
@@ -148,8 +139,8 @@ void *myrealloc(void *old_ptr, size_t new_size) {
         myfree(old_ptr);
     } else {
         Header *old_head = GET_HEADER(old_ptr);
-        size_t  old_size = GET_SIZE(old_head);
-        void * new_ptr = mymalloc(new_size); // updating of new header done in malloc
+        size_t old_size = GET_SIZE(old_head);
+        void *new_ptr = mymalloc(new_size); // updating of new header done in malloc
         if (new_ptr == NULL) { //realloc failed
             return NULL;
         }
@@ -164,17 +155,23 @@ void *myrealloc(void *old_ptr, size_t new_size) {
 }
 
 bool validate_heap() {
-    /* TODO: remove the line below and implement this to 
-     * check your internal structures!
-     * Return true if all is ok, or false otherwise.
-     * This function is called periodically by the test
-     * harness to check the state of the heap allocator.
-     * You can also use the breakpoint() function to stop
-     * in the debugger - e.g. if (something_is_wrong) breakpoint();
-     */
-
+  
     if(!base)  {
         return false;
     }
+    // print_heap();
     return true;
 }
+
+// prints entire heap from segment_start address
+// prints address and header information
+void print_heap() {
+    Header *cur = segment_start;
+    printf("Print entire heap: \n");
+   
+    while(GET_SIZE(cur)) {
+        printf("Header Address: %p ; Header: %lu\n", cur, GET(cur));
+        cur = GET_NEXT_HEADER(cur);
+    } 
+}
+
