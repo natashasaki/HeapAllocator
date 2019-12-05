@@ -287,6 +287,8 @@ void *myrealloc(void *old_ptr, size_t new_size) {
     }
 }
 
+// function that tries to continuously merge free blocks for realloc
+// and returns status on whether in-place realloc is possible
 bool can_inplace_realloc(Header *cur_head, size_t new_size) {
     size_t old_size = GET_SIZE(cur_head);
     size_t updated_block_size = old_size;
