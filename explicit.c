@@ -24,7 +24,7 @@
 #define GET_NEXT_HEADER(p) (Header*)((char*)p + GET_SIZE(p))
 #define GET_LISTPOINTERS(p) (ListPointers *)((Header*)p + 1)
 #define SET_NEXT_PTR(p1, p2) p1->next = p2->next
-
+                                                                    
 typedef struct header {
     size_t sa_bit; // stores size and allocation status
 } Header;
