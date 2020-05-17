@@ -1,6 +1,5 @@
 # Apply different gcc optimization flags (-Ox and -fxxx)
-# Initially, the flags are configured for no optimization (to enable better
-# debugging) 
+# Initially, the flags are configured for no optimization (to enable better debugging) 
 bump.o: CFLAGS += -O2
 implicit.o: CFLAGS += -O2
 explicit.o: CFLAGS += -O2
