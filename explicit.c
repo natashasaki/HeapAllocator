@@ -1,7 +1,6 @@
 /* This program contains the implementation of the explicit heap allocator,
    builds largely on the implicit free list allocator (see implicit.c).
-   However, this implementation manages to improve utilization and speed.
-   Merges, in place reallocs
+   See readme file for specific features
 */
 
 #include "allocator.h"
