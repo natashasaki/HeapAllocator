@@ -1,5 +1,5 @@
 # HeapAllocator
-Implementation of Heap Allocator from scratch
+Implementation of Heap Allocator from scratch to handle malloc, calloc, free requests
 
 Implicit Free List Allocator
 --------
