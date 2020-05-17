@@ -96,7 +96,7 @@ void *mymalloc(size_t requested_size) {
 }
 
 // function that searches for a free, usable block of at least
-// total_size  using best-fit (block with lowest amt of enough free space)
+// total_size using best-fit algorithm (block with lowest amt of enough free space)
 Header *find_best_header(Header** cur_head_ad, size_t total_size) {
     size_t best_blk_size = segment_size; //set to some max value
     Header *best_blk_head = NULL; 
