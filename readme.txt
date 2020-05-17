@@ -1,4 +1,4 @@
-# Heap_Allocator
+# HeapAllocator
 
 Implicit Free List Allocator
 --------
