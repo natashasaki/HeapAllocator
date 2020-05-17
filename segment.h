@@ -11,7 +11,7 @@
 
 /* Function: init_heap_segment
  * ---------------------------
- * This function is called to initialize the heap segment and allocate the
+ * Called to initialize the heap segment and allocate the
  * segment to hold total_size bytes. If init_heap_segment 
  * is called again, it discards the current heap segment and re-configures. 
  * The function returns the base address of the heap segment if successful 
