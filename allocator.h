@@ -15,7 +15,6 @@
 #define MAX_REQUEST_SIZE (1 << 30)
 
 
-
 /* Function: myinit
  * ----------------
  * This must be called by a client before making any allocation
